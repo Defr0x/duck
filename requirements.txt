@@ -1,0 +1,7 @@
+flask>=3.0.3
+mysql-connector-python>=9.0.0
+python-dotenv>=1.0.1
+werkzeug>=3.0.1
+
+# Локальная нейросеть (нужна только для чата, ставится отдельно):
+# pip install llama-cpp-python huggingface_hub

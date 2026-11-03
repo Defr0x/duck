@@ -1,54 +1,47 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Регистрация — NeuroAPI</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
-</head>
-<body class="auth-page">
+{% extends "base.html" %}
+{% block title %}Регистрация — НейроЧат{% endblock %}
+{% block body_class %}centered{% endblock %}
 
-<main class="card glass">
-    <div class="badge">🧠</div>
-    <h2>Создать аккаунт</h2>
-    <p class="subtitle">Пара секунд — и у тебя будет доступ к нейросетям</p>
+{% block content %}
+<div class="card auth-card">
+    <div class="auth-head">
+        <div class="auth-logo">🚀</div>
+        <h1>Регистрация</h1>
+        <p class="muted">Создайте аккаунт, чтобы общаться с нейросетью.</p>
+    </div>
 
     <form id="registerForm" novalidate>
-        <label class="field">
-            <span>Ваше имя</span>
-            <input type="text" id="fullname" placeholder="Иван Иванов" autocomplete="name" required>
-        </label>
+        <div class="form-group">
+            <label for="fullname">Ваше имя</label>
+            <input type="text" id="fullname" name="fullname" placeholder="Иван Иванов" autocomplete="name" required>
+        </div>
 
-        <label class="field">
-            <span>Email</span>
-            <input type="email" id="email" placeholder="example@mail.ru" autocomplete="email" required>
-        </label>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="example@mail.ru" autocomplete="email" required>
+        </div>
 
-        <label class="field">
-            <span>Пароль</span>
-            <div class="password-wrap">
-                <input type="password" id="password" placeholder="Минимум 6 символов" autocomplete="new-password" required>
+        <div class="form-group">
+            <label for="password">Пароль</label>
+            <div class="pass-wrap">
+                <input type="password" id="password" name="password" placeholder="Минимум 6 символов" autocomplete="new-password" required>
                 <button type="button" class="toggle-pass" aria-label="Показать пароль">👁</button>
             </div>
-        </label>
+        </div>
 
-        <label class="field">
-            <span>Повторите пароль</span>
-            <div class="password-wrap">
-                <input type="password" id="confirm_password" placeholder="Ещё раз пароль" autocomplete="new-password" required>
+        <div class="form-group">
+            <label for="confirm_password">Повторите пароль</label>
+            <div class="pass-wrap">
+                <input type="password" id="confirm_password" name="confirm_password" placeholder="Ещё раз" autocomplete="new-password" required>
                 <button type="button" class="toggle-pass" aria-label="Показать пароль">👁</button>
             </div>
-        </label>
+        </div>
 
-        <div class="form-error" id="error-msg" role="alert"></div>
+        <div id="error-msg" class="alert"></div>
 
-        <button class="btn" type="submit">Зарегистрироваться</button>
+        <button type="submit" class="btn btn-success btn-block">Зарегистрироваться</button>
     </form>
 
-    <p class="switch">Уже есть аккаунт? <a href="/login">Войти</a></p>
-</main>
-
-</body>
-</html>
+    <p class="switch-link">Уже есть аккаунт? <a href="{{ url_for('login_page') }}">Войти</a></p>
+</div>
+{% endblock %}
