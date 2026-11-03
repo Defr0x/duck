@@ -188,12 +188,57 @@ def check_db() -> None:
         cnx.close()
 
 
+def check_js() -> None:
+    """Ловит синтаксические ошибки в static/script.js — из-за них молчит весь сайт."""
+    section("JavaScript")
+    path = "static/script.js"
+    if not os.path.isfile(path):
+        bad("нет static/script.js — тогда не работают формы, пополнение и чат")
+        return
+
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node:
+        try:
+            result = subprocess.run(
+                [node, "--check", path], capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                ok("script.js: синтаксис в порядке (проверено node)")
+            else:
+                first = (result.stderr or result.stdout).strip().splitlines()
+                detail = " / ".join(first[:3]) if first else "ошибка разбора"
+                bad(f"script.js: синтаксическая ошибка — {detail}")
+        except Exception as exc:
+            warn(f"не удалось прогнать node --check: {exc}")
+    else:
+        notes.append("node не установлен — JS проверен только по балансу скобок")
+
+    # Простая эвристика на случай отсутствия node: считаем фигурные скобки
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    text = re.sub(r"//[^\n]*", "", text)
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    text = re.sub(r"'(?:\\.|[^'\\\\])*'", "''", text)
+    text = re.sub(r'"(?:\\.|[^"\\\\])*"', '""', text)
+    text = re.sub(r"`(?:\\.|[^`\\\\])*`", "``", text)
+    opens, closes = text.count("{"), text.count("}")
+    if opens != closes:
+        bad(f"script.js: несбалансированные фигурные скобки ({{ = {opens}, }} = {closes}) — "
+            "скорее всего лишняя или пропущенная скобка")
+    elif not node:
+        ok("script.js: скобки сбалансированы")
+
+
 def main() -> int:
     print("Диагностика проекта НейроЧат")
     check_python()
     check_files()
     check_encodings()
     check_templates()
+    check_js()
     check_packages()
     check_db()
 
