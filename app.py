@@ -13,8 +13,10 @@ from contextlib import closing
 from datetime import datetime
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from jinja2 import TemplateNotFound
 from mysql.connector import Error as MySQLError
 from mysql.connector import IntegrityError
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 try:  # .env не обязателен: если файла или пакета нет — берём окружение как есть
@@ -141,6 +143,51 @@ def security_headers(response):
 @app.context_processor
 def inject_globals():
     return {"fmt_money": fmt_money}
+
+
+def explain_error(exc: Exception) -> str:
+    """Человеческая подсказка к типичным ошибкам — чтобы не гадать по 500."""
+    if isinstance(exc, TemplateNotFound):
+        return (
+            f"Не найден шаблон «{exc.name}». Проверь, что папка templates лежит рядом "
+            "с app.py и в ней есть base.html, login.html, registration.html, "
+            "profile.html, transactions.html."
+        )
+    if isinstance(exc, UnicodeDecodeError):
+        return (
+            "Файл сохранён не в UTF-8. Открой его в редакторе и сохрани как "
+            "«UTF-8» (без BOM)."
+        )
+    if isinstance(exc, ModuleNotFoundError):
+        return (
+            f"Не установлен пакет «{exc.name}». Установи зависимости: "
+            "pip install -r requirements.txt"
+        )
+    if isinstance(exc, MySQLError):
+        return (
+            "Не удалось выполнить запрос к MySQL. Проверь доступы в db.py "
+            "(host, база, логин, пароль) и что таблицы users/transactions существуют."
+        )
+    if isinstance(exc, FileNotFoundError):
+        return "Не найден файл. Проверь структуру папок проекта."
+    return "Подробности — в терминале, где запущен python app.py (там печатается traceback)."
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(exc):
+    if isinstance(exc, HTTPException):
+        return exc
+    logger.exception("Необработанная ошибка на %s", request.path)
+    return (
+        render_template(
+            "error.html",
+            error_type=type(exc).__name__,
+            error_text=str(exc),
+            hint=explain_error(exc),
+            path=request.path,
+        ),
+        500,
+    )
 
 
 # ============ Страницы ============

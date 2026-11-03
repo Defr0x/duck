@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ошибка 500 — НейроЧат</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+            background: #eef2f9;
+            color: #1b2333;
+        }
+        .box {
+            width: 100%;
+            max-width: 620px;
+            background: #fff;
+            border: 1px solid #e3e9f2;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(22, 40, 79, 0.08);
+            padding: 26px;
+        }
+        h1 { margin: 0 0 6px; font-size: 22px; }
+        .sub { margin: 0 0 18px; color: #6c7a90; font-size: 14px; }
+        .label { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #6c7a90; margin: 16px 0 6px; }
+        .hint { background: #eef4ff; border: 1px solid #cddcff; border-radius: 10px; padding: 12px 14px; font-size: 14.5px; }
+        code, pre { font-family: Consolas, Menlo, monospace; font-size: 13px; }
+        pre {
+            margin: 6px 0 0;
+            padding: 12px;
+            background: #f7f9fd;
+            border: 1px solid #e3e9f2;
+            border-radius: 10px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        a { color: #2f6bff; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <h1>⚠️ Ошибка при обработке страницы</h1>
+    <p class="sub">Запрос: <code>{{ path }}</code></p>
+
+    <div class="hint">{{ hint }}</div>
+
+    <div class="label">Тип ошибки</div>
+    <pre>{{ error_type }}</pre>
+
+    <div class="label">Сообщение</div>
+    <pre>{{ error_text }}</pre>
+
+    <p class="sub" style="margin-top:18px">
+        Полный traceback печатается в терминале, где запущен <code>python app.py</code>.
+        Ещё можно запустить <code>python check.py</code> — он проверит файлы, шрифты и базу.
+    </p>
+
+    <p><a href="{{ url_for('login_page') }}">← Вернуться на страницу входа</a></p>
+</div>
+</body>
+</html>
