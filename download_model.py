@@ -20,7 +20,6 @@ def main() -> int:
         print("Просто запусти: python app.py")
         return 0
 
-    target = os.path.join(MODELS_DIR, MODEL_FILE)
     os.makedirs(MODELS_DIR, exist_ok=True)
 
     print(f"Скачиваю {MODEL_FILE} из {MODEL_REPO} …")
