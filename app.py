@@ -435,14 +435,21 @@ def chat():
         return jsonify({"reply": llm.demo_reply(message), "model": "demo"})
 
     status = llm.model.status()
-    if not status["ready"] and status["loading"]:
-        return jsonify({
-            "error": "Модель ещё загружается — это занимает до пары минут при первом запуске.",
-            "pending": True,
-        }), 202
     if not status["ready"]:
+        if status["loading"]:
+            return jsonify({
+                "error": "Модель загружается. Первый запуск качает ~400 МБ — подожди минуту и отправь сообщение ещё раз.",
+                "pending": True,
+            }), 202
+        if not status["error"]:
+            # Загрузку ещё не начинали (например, сервер стартовал не через app.run)
+            llm.model.warmup_async()
+            return jsonify({
+                "error": "Модель только начала загружаться. Подожди минуту и отправь сообщение ещё раз.",
+                "pending": True,
+            }), 202
         return jsonify({
-            "error": status["error"] or "Нейросеть не подключена.",
+            "error": status["error"],
             "hint": llm.HINT,
         }), 503
 
