@@ -22,12 +22,23 @@ MODEL_FILE = os.environ.get("MODEL_FILE", "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf")
 MODEL_PATH = os.environ.get("MODEL_PATH", "").strip()
 DEMO_MODE = os.environ.get("DEMO_MODE") == "1"
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+
 SYSTEM_PROMPT = "Ты полезный ассистент. Отвечай кратко и по-русски."
 
 HINT = (
     "Чтобы включить нейросеть: установи llama-cpp-python "
     "(pip install llama-cpp-python) и запусти python download_model.py."
 )
+
+
+def resolve_model_path() -> str:
+    """Путь к .gguf: из MODEL_PATH или из папки models/ рядом с проектом."""
+    if MODEL_PATH:
+        return MODEL_PATH
+    candidate = os.path.join(MODELS_DIR, MODEL_FILE)
+    return candidate if os.path.exists(candidate) else ""
 
 
 def demo_reply(message: str) -> str:
@@ -78,6 +89,7 @@ class LocalModel:
             "error": self._error,
             "model": MODEL_FILE,
             "repo": MODEL_REPO,
+            "path": resolve_model_path(),
         }
 
     # ---------- загрузка ----------
@@ -98,11 +110,12 @@ class LocalModel:
                 except ImportError:
                     raise ModelUnavailable("Не установлен llama-cpp-python.") from None
 
-                if MODEL_PATH:
-                    if not os.path.exists(MODEL_PATH):
-                        raise ModelUnavailable(f"Файл модели не найден: {MODEL_PATH}")
-                    logger.info("Загружаю модель из файла %s", MODEL_PATH)
-                    self._llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False)
+                local_path = resolve_model_path()
+                if local_path:
+                    if not os.path.exists(local_path):
+                        raise ModelUnavailable(f"Файл модели не найден: {local_path}")
+                    logger.info("Загружаю модель из файла %s", local_path)
+                    self._llm = Llama(model_path=local_path, n_ctx=2048, verbose=False)
                 else:
                     logger.info("Загружаю модель %s из %s (первый запуск — скачивание)", MODEL_FILE, MODEL_REPO)
                     self._llm = Llama.from_pretrained(
