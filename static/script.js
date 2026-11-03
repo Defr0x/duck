@@ -65,22 +65,30 @@ async function postJson(button, url, payload) {
         button.disabled = true;
         button.textContent = 'Подождите…';
     }
+    // Если сервер не ответил за 20 секунд — не висим вечно
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload || {}),
+            signal: controller.signal,
         });
         let data = {};
         try {
             data = await response.json();
         } catch (error) {
-            data = {};
+            data = { error: `Сервер вернул не JSON (код ${response.status})` };
         }
         return { ok: response.ok, status: response.status, data };
     } catch (error) {
-        return { ok: false, status: 0, data: { error: 'Нет соединения с сервером' } };
+        const reason = error.name === 'AbortError'
+            ? 'Сервер не ответил за 20 секунд — скорее всего зависла база данных'
+            : 'Нет соединения с сервером: проверь, что python app.py запущен и в терминале нет ошибок';
+        return { ok: false, status: 0, data: { error: reason } };
     } finally {
+        clearTimeout(timer);
         if (button) {
             button.disabled = false;
             button.textContent = originalText;

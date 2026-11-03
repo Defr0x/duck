@@ -378,6 +378,21 @@ def topup():
     return jsonify({"success": True, "balance": fmt_money(balance), "amount": fmt_money(amount)})
 
 
+@app.route("/api/ping")
+def api_ping():
+    """Быстрая проверка: сервер жив и база отвечает?"""
+    result = {"server": True, "db": False, "db_error": None}
+    try:
+        with closing(db.connect()) as cnx, closing(cnx.cursor()) as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        result["db"] = True
+    except MySQLError as exc:
+        result["db_error"] = str(exc)
+        logger.warning("Проверка связи: база недоступна: %s", exc)
+    return jsonify(result), 200 if result["db"] else 503
+
+
 # ============ API: чат с нейросетью ============
 
 @app.route("/api/chat/status")
