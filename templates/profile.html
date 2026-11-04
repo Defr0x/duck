@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Личный кабинет — НейроЧат{% endblock %}
+
+{% block content %}
+<main class="page">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Личный кабинет</h1>
+            <p class="page-sub">Привет, {{ user.username }}! Баланс, аккаунт и чат с нейросетью — всё здесь.</p>
+        </div>
+    </div>
+
+    <div class="dash-grid">
+        <div class="col">
+            <section class="card">
+                <h2 class="card-title">Баланс</h2>
+                <div class="balance"><span id="balanceAmount">{{ balance }}</span><span class="currency">₽</span></div>
+
+                <div class="chips">
+                    <button type="button" class="chip topup-btn" data-amount="100">+100 ₽</button>
+                    <button type="button" class="chip topup-btn" data-amount="500">+500 ₽</button>
+                    <button type="button" class="chip topup-btn" data-amount="1000">+1000 ₽</button>
+                </div>
+
+                <div class="amount-row">
+                    <input type="number" id="topupAmount" min="10" max="50000" step="10" placeholder="Своя сумма">
+                    <button type="button" id="topupCustom" class="btn btn-primary btn-sm">Пополнить</button>
+                </div>
+
+                <div id="topup-msg" class="alert"></div>
+                <p class="note">Демо-пополнение: деньги виртуальные, реальная оплата не подключена.</p>
+            </section>
+
+            <section class="card">
+                <h2 class="card-title">Аккаунт</h2>
+                <div class="row"><span class="label">Имя</span><span class="value">{{ user.username }}</span></div>
+                <div class="row"><span class="label">Email</span><span class="value">{{ user.email }}</span></div>
+
+                <a class="btn btn-ghost btn-block" href="{{ url_for('transactions_page') }}">История транзакций</a>
+                <form action="{{ url_for('logout') }}" method="post">
+                    <button type="submit" class="btn btn-danger btn-block">Выйти</button>
+                </form>
+            </section>
+        </div>
+
+        <section class="card chat-card">
+            <div class="chat-head">
+                <h2 class="card-title">Чат с нейросетью</h2>
+                <div class="chat-actions">
+                    <span id="modelBadge" class="badge {% if model_ready or demo_mode %}badge-ok{% endif %}">
+                        {% if demo_mode %}демо-режим без модели{% elif model_ready %}модель загружена{% else %}модель не загружена{% endif %}
+                    </span>
+                    <button type="button" id="chatClear" class="btn btn-ghost btn-sm">Очистить</button>
+                </div>
+            </div>
+
+            <div id="chat-messages" class="chat-messages">
+                <div class="msg bot">Привет! Я локальная нейросеть. Спроси что-нибудь — отвечу без интернета и без оплаты.</div>
+            </div>
+
+            <form id="chat-form">
+                <textarea id="chat-input" rows="2" placeholder="Ваше сообщение… (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
+                <button type="submit" class="btn btn-primary btn-block">Отправить</button>
+            </form>
+
+            <p class="note">История чата хранится только в этой вкладке и нигде не сохраняется.</p>
+        </section>
+    </div>
+</main>
+{% endblock %}

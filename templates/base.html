@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}НейроЧат{% endblock %}</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+{% if session.get('user_id') %}
+<header class="topbar">
+    <a class="brand" href="{{ url_for('profile_page') }}">🧠 <span>НейроЧат</span></a>
+    <nav class="topnav">
+        <a href="{{ url_for('profile_page') }}" {% if request.endpoint == 'profile_page' %}class="active"{% endif %}>Профиль</a>
+        <a href="{{ url_for('transactions_page') }}" {% if request.endpoint == 'transactions_page' %}class="active"{% endif %}>Транзакции</a>
+        <form action="{{ url_for('logout') }}" method="post">
+            <button type="submit" class="btn btn-ghost btn-sm">Выйти</button>
+        </form>
+    </nav>
+</header>
+{% endif %}
+
+{% block content %}{% endblock %}
+
+</body>
+</html>

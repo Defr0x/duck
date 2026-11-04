@@ -1,13 +1,22 @@
 [project]
-name = "neuroapi"
-version = "0.2.0"
-description = "NeuroAPI — сайт-магазин доступа к нейросетям (Flask + MySQL)"
+name = "neurochat"
+version = "0.3.0"
+description = "НейроЧат — регистрация, личный кабинет с балансом, чат с локальной нейросетью (Flask + MySQL + llama.cpp)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0.3",
     "mysql-connector-python>=9.0.0",
     "python-dotenv>=1.0.1",
+    "werkzeug>=3.0.1",
+]
+
+# Локальная нейросеть — отдельная группа, потому что ставится долго:
+#   pip install ".[llm]"
+[project.optional-dependencies]
+llm = [
+    "llama-cpp-python>=0.2.90",
+    "huggingface_hub>=0.24.0",
 ]
 
 # Проект — не пакет (запускаем app.py напрямую)

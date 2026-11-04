@@ -1,79 +1,86 @@
-"""
-Демо-режим NeuroAPI без MySQL.
+"""Демо-запуск без MySQL: тот же сайт на локальной SQLite.
 
-Хостеры шаред-хостинга часто закрывают внешние подключения к MySQL,
-поэтому для локальной проверки/превью проще поднять весь сайт на
-локальной SQLite-базе — код приложения тот же самый, меняется только
-подключение к БД.
+Нужен, чтобы посмотреть/проверить проект там, где нет доступа к базе
+(например, на домашнем компьютере). Код приложения при этом не меняется —
+подменяется только подключение к БД.
 
 Запуск:
     python demo_run.py
+    # открыть http://127.0.0.1:5000
 """
 
 import os
 import re
 import sqlite3
+import sys
 
-import mysql.connector
+DEMO_DB = os.environ.get("DEMO_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo.db"))
 
-DEMO_DB = os.environ.get("DEMO_DB", "/tmp/neuroapi_demo.db")
-
-CREATE_USERS_SQLITE = """
+USERS_DDL = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    balance REAL NOT NULL DEFAULT 0
+    balance REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )
 """
 
-CREATE_KEYS_SQLITE = """
-CREATE TABLE IF NOT EXISTS api_keys (
+TRANSACTIONS_DDL = """
+CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    product VARCHAR(50) NOT NULL,
-    api_key VARCHAR(80) NOT NULL UNIQUE,
-    active TINYINT(1) NOT NULL DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    amount REAL NOT NULL DEFAULT 0,
+    type TEXT NOT NULL DEFAULT 'deposit',
+    cost REAL,
+    description TEXT,
+    balance_after REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )
 """
 
 
 class DemoCursor:
-    """Обертка над sqlite-курсором, имитирующая mysql-connector."""
+    """Обёртка над курсором sqlite3, повторяющая поведение mysql-connector."""
 
     def __init__(self, cur, dictionary=False):
         self._cur = cur
-        self._dict = dictionary
+        self._dictionary = dictionary
         self.lastrowid = None
+        self.rowcount = 0
 
     def execute(self, sql, params=()):
-        if re.match(r"\s*CREATE TABLE IF NOT EXISTS `?api_keys`?", sql, re.I):
-            sql = CREATE_KEYS_SQLITE
-        sql = re.sub(r"%s", "?", sql.replace("`", ""))
+        sql = self._translate(sql)
         try:
             self._cur.execute(sql, params or ())
-        except sqlite3.IntegrityError as e:
-            # Пробрасываем как ошибку MySQL — код приложения ловит именно её
-            raise mysql.connector.IntegrityError(str(e))
+        except sqlite3.IntegrityError as exc:
+            # Приложению важно отличить «email уже занят» от прочих ошибок
+            from mysql.connector import IntegrityError
+            raise IntegrityError(str(exc)) from None
         self.lastrowid = self._cur.lastrowid
+        self.rowcount = self._cur.rowcount
 
-    def _convert(self, row):
-        if row is None or not self._dict:
+    @staticmethod
+    def _translate(sql: str) -> str:
+        head = sql.strip().upper()
+        if head.startswith("CREATE TABLE") and "USERS" in head:
+            return USERS_DDL
+        if head.startswith("CREATE TABLE") and "TRANSACTIONS" in head:
+            return TRANSACTIONS_DDL
+        return re.sub(r"%s", "?", sql.replace("`", ""))
+
+    def _row(self, row):
+        if row is None or not self._dictionary:
             return row
-        cols = [d[0] for d in self._cur.description]
-        return dict(zip(cols, row))
+        columns = [description[0] for description in self._cur.description]
+        return dict(zip(columns, row))
 
     def fetchone(self):
-        return self._convert(self._cur.fetchone())
+        return self._row(self._cur.fetchone())
 
     def fetchall(self):
-        return [self._convert(r) for r in self._cur.fetchall()]
-
-    @property
-    def rowcount(self):
-        return self._cur.rowcount
+        return [self._row(row) for row in self._cur.fetchall()]
 
     def close(self):
         self._cur.close()
@@ -81,65 +88,80 @@ class DemoCursor:
 
 class DemoConnection:
     def __init__(self):
-        self._c = sqlite3.connect(DEMO_DB, check_same_thread=False, timeout=10)
+        self._cnx = sqlite3.connect(DEMO_DB, check_same_thread=False, timeout=10)
 
     def cursor(self, dictionary=False, buffered=False):
-        return DemoCursor(self._c.cursor(), dictionary=dictionary)
+        return DemoCursor(self._cnx.cursor(), dictionary=dictionary)
 
     def commit(self):
-        self._c.commit()
+        self._cnx.commit()
 
     def rollback(self):
-        self._c.rollback()
+        self._cnx.rollback()
 
     def close(self):
-        self._c.close()
-
-    def is_connected(self):
-        return True
+        self._cnx.close()
 
 
 def demo_connect(*args, **kwargs):
     return DemoConnection()
 
 
-def main():
-    # Подменяем подключение к MySQL на локальную SQLite до старта приложения
-    mysql.connector.connect = demo_connect
+def seed_demo_data() -> None:
+    """Один демо-пользователь, чтобы было что посмотреть сразу."""
+    from werkzeug.security import generate_password_hash
 
-    with closing_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(CREATE_USERS_SQLITE)
-        cur.execute(CREATE_KEYS_SQLITE)
-        conn.commit()
+    cnx = DemoConnection()
+    try:
+        cur = cnx.cursor(dictionary=True)
+        cur.execute("SELECT COUNT(*) AS total FROM users")
+        if cur.fetchone()["total"]:
+            return
+        cur.execute(
+            "INSERT INTO users (username, email, password_hash, balance) VALUES (?, ?, ?, ?)",
+            ("Демо", "demo@demo.ru", generate_password_hash("demo123"), 1500.0),
+        )
+        user_id = cur.lastrowid
+        for amount, description, balance_after in (
+            (1000.0, "Пополнение баланса (демо)", 1000.0),
+            (500.0, "Пополнение баланса (демо)", 1500.0),
+        ):
+            cur.execute(
+                "INSERT INTO transactions (user_id, amount, type, cost, description, balance_after) "
+                "VALUES (?, ?, 'deposit', NULL, ?, ?)",
+                (user_id, amount, description, balance_after),
+            )
+        cnx.commit()
+    finally:
+        cnx.close()
 
-    # Фиктивные значения, чтобы приложение не ругалось на пустой конфиг
-    os.environ.setdefault("DB_HOST", "demo")
-    os.environ.setdefault("DB_NAME", "demo")
-    os.environ.setdefault("DB_USER", "demo")
-    os.environ.setdefault("DB_PASSWORD", "demo")
-    os.environ.setdefault("SECRET_KEY", "demo-secret-key")
-    os.environ.setdefault("HOST", "127.0.0.1")
+
+def main() -> None:
+    # Демо-режим: модель не грузим, иначе первый запрос полезет качать 400 МБ
+    os.environ.setdefault("DEMO_MODE", "1")
+    os.environ.setdefault("HOST", "0.0.0.0")
     os.environ.setdefault("PORT", "5000")
 
-    from app import run
+    import db
 
-    print(f"[DEMO] NeuroAPI работает на локальной базе {DEMO_DB} (MySQL не используется)")
-    run()
+    db.connect = demo_connect
 
+    import app as application
 
-def closing_connection():
-    conn = DemoConnection()
+    db.init_schema()
+    seed_demo_data()
 
-    class _Ctx:
-        def __enter__(self):
-            return conn
+    print(f"[DEMO] База: {DEMO_DB} (SQLite вместо MySQL)")
+    print("[DEMO] Демо-аккаунт: demo@demo.ru / demo123")
+    print(f"[DEMO] Сайт: http://127.0.0.1:{os.environ.get('PORT', '5000')}")
 
-        def __exit__(self, *exc):
-            conn.close()
-
-    return _Ctx()
+    application.app.run(
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "5000")),
+        debug=os.environ.get("FLASK_DEBUG") == "1",
+        use_reloader=False,
+    )
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

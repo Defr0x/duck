@@ -11,3 +11,8 @@ wheels/
 
 # Secrets / local config
 .env
+
+# Локальные данные: база демо-режима и файлы моделей
+demo.db
+*.gguf
+models/

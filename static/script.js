@@ -1,257 +1,333 @@
-// === NeuroAPI: логика форм и личного кабинета ===
+// === НейроЧат: формы, баланс и чат ===
 
 document.addEventListener('DOMContentLoaded', () => {
     setupPasswordToggles();
 
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
-        loginForm.addEventListener('submit', (e) => {
-            e.preventDefault();
+        loginForm.addEventListener('submit', (event) => {
+            event.preventDefault();
             handleLogin(loginForm);
         });
     }
 
     const registerForm = document.getElementById('registerForm');
     if (registerForm) {
-        registerForm.addEventListener('submit', (e) => {
-            e.preventDefault();
+        registerForm.addEventListener('submit', (event) => {
+            event.preventDefault();
             handleRegister(registerForm);
         });
     }
 
-    if (document.getElementById('keysList')) {
-        setupDashboard();
+    if (document.getElementById('topupAmount')) {
+        setupTopup();
+    }
+
+    if (document.getElementById('chat-form')) {
+        setupChat();
     }
 });
 
-// ---- Утилиты ----
+// ---------- Утилиты ----------
 
 function setupPasswordToggles() {
-    document.querySelectorAll('.toggle-pass').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const input = btn.parentElement.querySelector('input');
+    document.querySelectorAll('.toggle-pass').forEach((button) => {
+        button.addEventListener('click', () => {
+            const input = button.parentElement.querySelector('input');
+            if (!input) return;
             const show = input.type === 'password';
             input.type = show ? 'text' : 'password';
-            btn.textContent = show ? '🙈' : '👁';
-            btn.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
+            button.textContent = show ? '🙈' : '👁';
+            button.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
         });
     });
 }
 
-function errorBox(id) {
-    return document.getElementById(id);
-}
-
-function showError(msg, id = 'error-msg') {
-    const box = errorBox(id);
+function showAlert(message, id = 'error-msg', kind = 'error') {
+    const box = document.getElementById(id);
     if (!box) return;
-    box.textContent = msg;
+    box.textContent = message;
+    box.classList.toggle('ok', kind === 'ok');
     box.classList.add('show');
 }
 
-function hideError(id = 'error-msg') {
-    const box = errorBox(id);
+function hideAlert(id = 'error-msg') {
+    const box = document.getElementById(id);
     if (!box) return;
     box.textContent = '';
-    box.classList.remove('show');
+    box.classList.remove('show', 'ok');
 }
 
-// JSON-запрос с блокировкой кнопки на время ожидания
-async function postJson(btn, url, payload) {
-    let originalText = null;
-    if (btn) {
-        originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Подожди…';
+// POST JSON с блокировкой кнопки на время запроса
+async function postJson(button, url, payload) {
+    const originalText = button ? button.textContent : null;
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Подождите…';
     }
+    // Если сервер не ответил за 20 секунд — не висим вечно
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
-        const res = await fetch(url, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload || {}),
+            signal: controller.signal,
         });
         let data = {};
         try {
-            data = await res.json();
-        } catch (e) { /* ответ не JSON */ }
-        return { ok: res.ok, data };
-    } catch (e) {
-        return { ok: false, data: { error: 'Нет соединения с сервером' } };
+            data = await response.json();
+        } catch (error) {
+            data = { error: `Сервер вернул не JSON (код ${response.status})` };
+        }
+        return { ok: response.ok, status: response.status, data };
+    } catch (error) {
+        const reason = error.name === 'AbortError'
+            ? 'Сервер не ответил за 20 секунд — скорее всего зависла база данных'
+            : 'Нет соединения с сервером: проверь, что python app.py запущен и в терминале нет ошибок';
+        return { ok: false, status: 0, data: { error: reason } };
     } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = originalText;
+        clearTimeout(timer);
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
         }
     }
 }
 
-// ---- Аутентификация ----
+// ---------- Вход и регистрация ----------
 
 async function handleLogin(form) {
-    hideError();
+    hideAlert();
     const email = form.querySelector('#email').value.trim();
     const password = form.querySelector('#password').value;
 
     if (!email || !password) {
-        showError('Заполни email и пароль');
+        showAlert('Заполни email и пароль');
         return;
     }
 
-    const btn = form.querySelector('button[type="submit"]');
-    const { ok, data } = await postJson(btn, '/api/login', { email, password });
+    const button = form.querySelector('button[type="submit"]');
+    const { ok, data } = await postJson(button, '/api/login', { email, password });
+
     if (ok && data.redirect_url) {
         window.location.href = data.redirect_url;
-    } else {
-        showError(data.error || 'Ошибка входа, попробуй ещё раз');
+        return;
     }
+    showAlert(data.error || 'Не удалось войти, попробуй ещё раз');
 }
 
 async function handleRegister(form) {
-    hideError();
+    hideAlert();
     const name = form.querySelector('#fullname').value.trim();
     const email = form.querySelector('#email').value.trim();
     const password = form.querySelector('#password').value;
     const confirm = form.querySelector('#confirm_password').value;
 
     if (!name || !email || !password) {
-        showError('Заполни все поля');
+        showAlert('Заполни все поля');
         return;
     }
     if (password.length < 6) {
-        showError('Пароль должен быть не короче 6 символов');
+        showAlert('Пароль должен быть не короче 6 символов');
         return;
     }
     if (password !== confirm) {
-        showError('Пароли не совпадают');
+        showAlert('Пароли не совпадают');
         return;
     }
 
-    const btn = form.querySelector('button[type="submit"]');
-    const { ok, data } = await postJson(btn, '/api/register', { name, email, password });
+    const button = form.querySelector('button[type="submit"]');
+    const { ok, data } = await postJson(button, '/api/register', { name, email, password });
+
     if (ok && data.redirect_url) {
         window.location.href = data.redirect_url;
+        return;
+    }
+    showAlert(data.error || 'Не удалось зарегистрироваться');
+}
+
+// ---------- Баланс ----------
+
+function setupTopup() {
+    const amountInput = document.getElementById('topupAmount');
+    const customButton = document.getElementById('topupCustom');
+
+    document.querySelectorAll('.topup-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+            const amount = Number(button.dataset.amount || 0);
+            topUp(amount, button);
+        });
+    });
+
+    if (customButton) {
+        customButton.addEventListener('click', () => {
+            const amount = Number(amountInput.value);
+            if (!amount || amount < 10) {
+                showAlert('Введи сумму от 10 ₽', 'topup-msg');
+                return;
+            }
+            topUp(amount, customButton);
+        });
+    }
+
+    if (amountInput) {
+        amountInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (customButton) customButton.click();
+            }
+        });
+    }
+}
+
+async function topUp(amount, button) {
+    hideAlert('topup-msg');
+    const { ok, data } = await postJson(button, '/api/topup', { amount });
+
+    if (ok) {
+        const balanceNode = document.getElementById('balanceAmount');
+        if (balanceNode && data.balance) {
+            balanceNode.textContent = data.balance;
+        }
+        showAlert(`Баланс пополнен на ${data.amount} ₽`, 'topup-msg', 'ok');
+        const input = document.getElementById('topupAmount');
+        if (input) input.value = '';
     } else {
-        showError(data.error || 'Не получилось зарегистрироваться');
+        showAlert(data.error || 'Не удалось пополнить баланс', 'topup-msg');
     }
 }
 
-// ---- Личный кабинет ----
+// ---------- Чат ----------
 
-function setupDashboard() {
-    document.querySelectorAll('.topup-btn').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            hideError('dashError');
-            const { ok, data } = await postJson(btn, '/api/topup', { amount: Number(btn.dataset.amount) });
-            if (ok) {
-                updateBalance(data.balance);
-            } else {
-                showError(data.error || 'Не получилось пополнить баланс', 'dashError');
-            }
-        });
-    });
+function setupChat() {
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('chat-input');
+    const messages = document.getElementById('chat-messages');
+    const clearButton = document.getElementById('chatClear');
+    const badge = document.getElementById('modelBadge');
 
-    document.querySelectorAll('.buy-btn').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            hideError('dashError');
-            const { ok, data } = await postJson(btn, '/api/purchase', { product: btn.dataset.product });
-            if (ok) {
-                updateBalance(data.balance);
-                showNewKey(data.product_name, data.api_key);
-                await refreshKeys();
-            } else {
-                if (data.error && data.error.includes('пополни баланс')) {
-                    document.getElementById('balanceAmount').scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-                showError(data.error || 'Покупка не удалась', 'dashError');
-            }
-        });
-    });
+    // История нужна модели для контекста; живёт только в этой вкладке
+    const history = [];
+    let busy = false;
 
-    document.getElementById('copyKeyBtn').addEventListener('click', copyNewKey);
-}
-
-function updateBalance(balance) {
-    document.getElementById('balanceAmount').textContent = `${balance} ₽`;
-}
-
-function showNewKey(productName, apiKey) {
-    const box = document.getElementById('newKeyBox');
-    document.getElementById('newKeyProduct').textContent = productName;
-    document.getElementById('newKeyValue').textContent = apiKey;
-    box.hidden = false;
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-async function copyNewKey() {
-    const btn = document.getElementById('copyKeyBtn');
-    const value = document.getElementById('newKeyValue').textContent;
-    try {
-        await navigator.clipboard.writeText(value);
-        btn.textContent = 'Скопировано ✓';
-    } catch (e) {
-        btn.textContent = 'Выдели вручную';
+    function append(role, text, extraClass = '') {
+        const node = document.createElement('div');
+        node.className = `msg ${role}${extraClass ? ' ' + extraClass : ''}`;
+        node.textContent = text;
+        messages.appendChild(node);
+        messages.scrollTop = messages.scrollHeight;
+        return node;
     }
-    setTimeout(() => { btn.textContent = 'Копировать'; }, 2000);
-}
 
-// Перерисовывает список ключей по данным /api/me
-async function refreshKeys() {
-    const res = await fetch('/api/me');
-    if (!res.ok) return;
-    const data = await res.json();
+    function typing() {
+        const node = document.createElement('div');
+        node.className = 'msg bot typing';
+        node.innerHTML = '<span></span><span></span><span></span>';
+        messages.appendChild(node);
+        messages.scrollTop = messages.scrollHeight;
+        return node;
+    }
 
-    updateBalance(data.balance);
-    document.getElementById('keysEmpty').hidden = data.keys.length > 0;
+    function setBadge(text, isOk) {
+        if (!badge) return;
+        badge.textContent = text;
+        badge.classList.toggle('badge-ok', Boolean(isOk));
+    }
 
-    const list = document.getElementById('keysList');
-    list.innerHTML = '';
-    for (const k of data.keys) {
-        const item = document.createElement('div');
-        item.className = 'key-item';
+    async function send() {
+        const text = input.value.trim();
+        if (!text || busy) return;
 
-        const icon = document.createElement('span');
-        icon.className = 'k-icon';
-        icon.textContent = k.product_icon;
+        busy = true;
+        hideAlert();
+        append('user', text);
+        input.value = '';
+        input.style.height = '';
 
-        const body = document.createElement('div');
-        body.className = 'k-body';
-        const prod = document.createElement('div');
-        prod.className = 'k-product';
-        prod.textContent = k.product_name;
-        const key = document.createElement('div');
-        key.className = 'k-key';
-        key.textContent = k.api_key;
-        body.append(prod, key);
+        const bubble = typing();
+        const payload = {
+            message: text,
+            history: history.slice(-10),
+        };
 
-        const date = document.createElement('span');
-        date.className = 'k-date';
-        date.textContent = k.created;
-
-        item.append(icon, body, date);
-
-        if (k.active) {
-            const revoke = document.createElement('button');
-            revoke.className = 'btn btn-sm btn-ghost';
-            revoke.textContent = 'Отозвать';
-            revoke.addEventListener('click', () => revokeKey(k.id, revoke));
-            item.append(revoke);
-        } else {
-            const off = document.createElement('span');
-            off.className = 'badge-off';
-            off.textContent = 'отозван';
-            item.append(off);
+        let response;
+        try {
+            response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } catch (error) {
+            bubble.remove();
+            append('bot', 'Нет соединения с сервером. Проверь, что приложение запущено.', 'error');
+            busy = false;
+            return;
         }
 
-        list.append(item);
-    }
-}
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (error) {
+            data = {};
+        }
 
-async function revokeKey(keyId, btn) {
-    hideError('dashError');
-    const { ok, data } = await postJson(btn, '/api/revoke_key', { key_id: keyId });
-    if (ok) {
-        await refreshKeys();
-    } else {
-        showError(data.error || 'Не получилось отозвать ключ', 'dashError');
+        bubble.remove();
+
+        if (response.ok && data.reply) {
+            append('bot', data.reply);
+            history.push({ role: 'user', content: text });
+            history.push({ role: 'assistant', content: data.reply });
+            setBadge('модель загружена', true);
+        } else {
+            const message = data.error || 'Модель не ответила, попробуй ещё раз';
+            append('bot', data.hint ? `${message}\n\n${data.hint}` : message, 'error');
+            if (response.status === 202) {
+                setBadge('модель загружается…', false);
+            } else if (response.status === 503) {
+                setBadge('модель не загружена', false);
+            }
+        }
+
+        busy = false;
+        input.focus();
     }
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        send();
+    });
+
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            send();
+        }
+    });
+
+    if (clearButton) {
+        clearButton.addEventListener('click', () => {
+            history.length = 0;
+            messages.innerHTML = '';
+            append('bot', 'Чат очищен. О чём поговорим?');
+        });
+    }
+
+    // Узнаём состояние модели при открытии страницы
+    fetch('/api/chat/status')
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+            if (!data) return;
+            if (data.demo) {
+                setBadge('демо-режим без модели', true);
+            } else if (data.ready) {
+                setBadge('модель загружена', true);
+            } else if (data.loading) {
+                setBadge('модель загружается…', false);
+            } else {
+                setBadge('модель не загружена', false);
+            }
+        })
+        .catch(() => {});
 }
